@@ -13,6 +13,8 @@ from datetime import datetime
 from duckduckgo_search import DDGS
 from flask import Flask
 from threading import Thread
+import signal
+import sys
 
 def get_db_connection():
     return sqlite3.connect("bot_data.db", timeout=20)
@@ -100,6 +102,27 @@ async def status_loop(text_template):
             await client(functions.account.UpdateProfileRequest(about=final_status))
             await asyncio.sleep(60)
         except: await asyncio.sleep(10)
+
+# Функция, которая очистит статус перед выходом
+async def clear_status():
+    print("🧹 Очистка статуса перед выходом...")
+    try:
+        # Устанавливает пустой био (или твой стандартный текст)
+        await client(functions.account.UpdateProfileRequest(about=""))
+        print("✅ Статус успешно очищен")
+    except Exception as e:
+        print(f"❌ Не удалось очистить статус: {e}")
+
+# Обработчик системных сигналов (SIGTERM срабатывает на Koyeb при деплое)
+def signal_handler(sig, frame):
+    import asyncio
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(clear_status())
+    sys.exit(0)
+
+# Регистрируем обработчик
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
 
 # =======================================================
 #               ГЛАВНЫЙ ПРОЦЕССОР КОМАНД
