@@ -87,59 +87,87 @@ def set_config(key, value):
     conn.cursor().execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
     conn.commit(); conn.close()
 
-# --- ЛОГИКА АВТОСТАТУСА ---
+# --- ЛОГИКА ЧАСОВ ---
 def get_clock_emoji():
     clocks = ["🕛", "🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚"]
     hour = datetime.now(pytz.timezone('Europe/Moscow')).hour % 12
     return clocks[hour]
 
-async def status_loop(text_template):
-    while True:
-        try:
-            msk_time = datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M")
-            emoji = get_clock_emoji()
-            final_status = text_template.replace("{time}", f"{msk_time}{emoji}")
-            await client(functions.account.UpdateProfileRequest(about=final_status))
-            await asyncio.sleep(60)
-        except: await asyncio.sleep(10)
-
+# --- ЛОГИКА ПОГОДЫ (Твоя функция, чуть причесанная) ---
 def get_weather(city_name):
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
         
-        # ЭТАП 1: Ищем координаты города (Геокодинг)
-        # language=ru помогает найти "Москва" или "Minsk"
+        # ЭТАП 1: Геокодинг
         geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={requests.utils.quote(city_name)}&count=1&language=ru&format=json"
         geo_res = requests.get(geo_url, headers=headers, timeout=5)
         geo_data = geo_res.json()
 
         if not geo_data.get("results"):
-            return f"🚫 Нет города| {city_name}"
+            return f"🚫 Нет города {city_name}"
 
         lat = geo_data["results"][0]["latitude"]
         lon = geo_data["results"][0]["longitude"]
-        real_name = geo_data["results"][0]["name"] # Официальное название города
+        real_name = geo_data["results"][0]["name"]
 
-        # ЭТАП 2: Получаем погоду по координатам
+        # ЭТАП 2: Погода
         weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m&timezone=auto"
         w_res = requests.get(weather_url, headers=headers, timeout=5)
         w_data = w_res.json()
 
-        # Достаем данные
         temp = w_data["current"]["temperature_2m"]
         hum = w_data["current"]["relative_humidity_2m"]
         
-        # Форматируем: +5°🌡️, 80% 💧| Minsk
-        # Добавляем плюс, если температура выше нуля
         sign = "+" if temp > 0 else ""
-        
-        return f"{sign}{temp}°🌡️, {hum}% 💧| {real_name}"
+        return f"{sign}{temp}°🌡️, {hum}%💧| {real_name}"
 
     except Exception as e:
         print(f"[Weather Error] {e}")
-        return f"🚫 Ошибка| {city_name}"
+        return "⚠️ Ошибка погоды"
+
+# --- ГЛАВНЫЙ ЦИКЛ ОБНОВЛЕНИЯ ---
+async def status_loop(text_template):
+    # Пример шаблона: "Время: {time} | Погода: {weather|Minsk}"
+    
+    while True:
+        try:
+            # 1. Работаем со временем
+            msk_time = datetime.now(pytz.timezone('Europe/Moscow')).strftime("%H:%M")
+            emoji = get_clock_emoji()
+            
+            # Начинаем формировать статус с замены времени
+            final_status = text_template.replace("{time}", f"{msk_time}{emoji}")
+
+            # 2. Работаем с погодой (ЭТО БЫЛО ПРОПУЩЕНО)
+            if "{weather|" in final_status:
+                try:
+                    # Вырезаем название города между "|" и "}"
+                    # Пример: из "{weather|Minsk}" достаем "Minsk"
+                    city_part = final_status.split("{weather|")[1].split("}")[0]
+                    
+                    # Получаем погоду (запускаем в отдельном потоке, чтобы не тормозить бота)
+                    weather_text = await asyncio.to_thread(get_weather, city_part)
+                    
+                    # Заменяем весь тег {weather|Minsk} на результат
+                    full_tag = f"{{weather|{city_part}}}"
+                    final_status = final_status.replace(full_tag, weather_text)
+                except IndexError:
+                    print("⚠️ Ошибка парсинга города в шаблоне статуса")
+
+            # 3. Отправляем в Telegram
+            await client(functions.account.UpdateProfileRequest(about=final_status))
+            
+            # Лог для проверки (виден в консоли Koyeb)
+            print(f"✅ Статус обновлен: {final_status}")
+
+            # Ждем 60 секунд
+            await asyncio.sleep(60)
+
+        except Exception as e:
+            print(f"❌ Ошибка в цикле статуса: {e}")
+            await asyncio.sleep(10)
 
 # Функция, которая очистит статус перед выходом
 async def clear_status():
@@ -223,7 +251,7 @@ async def command_processor(event, text):
             conn.close()
 
             info_text = (
-                f"🛠 **UserBot Helper**\n"
+                f"🛠 **Fox UserBotTG**\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"✅ **Статус:** `Работает`\n"
                 f"📌 **Версия:** `{VERSION}`\n"
@@ -232,7 +260,7 @@ async def command_processor(event, text):
             )
             await event.edit(info_text)
 
-        elif command == "доверяю":
+        elif command == "довы":
             await event.edit("🔍 *Загружаю список доверенных...*")
             conn = sqlite3.connect(DB_NAME)
             rows = conn.cursor().execute("SELECT user_id FROM trusted_users").fetchall()
