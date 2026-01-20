@@ -1,0 +1,6 @@
+telethon
+requests
+pytz
+flask
+g4f
+ntplib
