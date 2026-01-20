@@ -5,3 +5,4 @@ flask
 g4f
 ntplib
 duckduckgo_search
+beautifulsoup4
