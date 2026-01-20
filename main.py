@@ -604,6 +604,15 @@ if __name__ == '__main__':
     import asyncio
     asyncio.run(main())
 
-print(f"Бот {VERSION} запущен.")
-client.start()
-client.run_until_disconnected()
+async def main():
+    await client.start()
+    print("🚀 Бот запущен!")
+    
+    # Запускаем автостатус как фоновую задачу
+    asyncio.create_task(status_updater())
+    
+    # Оставляем бота слушать команды
+    await client.run_until_disconnected()
+
+# Запуск всей программы
+client.loop.run_until_complete(main())
