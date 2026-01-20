@@ -103,6 +103,44 @@ async def status_loop(text_template):
             await asyncio.sleep(60)
         except: await asyncio.sleep(10)
 
+def get_weather(city_name):
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        
+        # ЭТАП 1: Ищем координаты города (Геокодинг)
+        # language=ru помогает найти "Москва" или "Minsk"
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={requests.utils.quote(city_name)}&count=1&language=ru&format=json"
+        geo_res = requests.get(geo_url, headers=headers, timeout=5)
+        geo_data = geo_res.json()
+
+        if not geo_data.get("results"):
+            return f"🚫 Нет города| {city_name}"
+
+        lat = geo_data["results"][0]["latitude"]
+        lon = geo_data["results"][0]["longitude"]
+        real_name = geo_data["results"][0]["name"] # Официальное название города
+
+        # ЭТАП 2: Получаем погоду по координатам
+        weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m&timezone=auto"
+        w_res = requests.get(weather_url, headers=headers, timeout=5)
+        w_data = w_res.json()
+
+        # Достаем данные
+        temp = w_data["current"]["temperature_2m"]
+        hum = w_data["current"]["relative_humidity_2m"]
+        
+        # Форматируем: +5°🌡️, 80% 💧| Minsk
+        # Добавляем плюс, если температура выше нуля
+        sign = "+" if temp > 0 else ""
+        
+        return f"{sign}{temp}°🌡️, {hum}% 💧| {real_name}"
+
+    except Exception as e:
+        print(f"[Weather Error] {e}")
+        return f"🚫 Ошибка| {city_name}"
+
 # Функция, которая очистит статус перед выходом
 async def clear_status():
     print("🧹 Очистка статуса перед выходом...")
