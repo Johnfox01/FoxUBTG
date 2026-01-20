@@ -17,28 +17,23 @@ from threading import Thread
 def get_db_connection():
     return sqlite3.connect("bot_data.db", timeout=20)
 
-# Теперь мы берем данные из Environment Variables, которые ты ввел в панели Koyeb
-# 1. Получаем данные из настроек Koyeb (Environment Variables)
-# Используем одинаковые имена переменных везде
-API_ID = os.environ.get("API_ID")
-API_HASH = os.environ.get("API_HASH")
-STRING_SESSION = os.environ.get("STRING_SESSION")
+# 1. Получаем данные из настроек Koyeb
+# Создаем переменные и в ВЕРХНЕМ, и в нижнем регистре, чтобы код не путался
+API_ID = api_id = int(os.environ.get("API_ID", 0))
+API_HASH = api_hash = os.environ.get("API_HASH", "")
+STRING_SESSION = string_session = os.environ.get("STRING_SESSION", "")
 
-# 2. Проверка на наличие данных
-if not all([API_ID, API_HASH, STRING_SESSION]):
-    print("❌ ОШИБКА: Одна из переменных (API_ID, API_HASH, STRING_SESSION) не задана в настройках Koyeb!")
+# Проверка
+if not API_ID or not API_HASH or not STRING_SESSION:
+    print("❌ ОШИБКА: Проверь Environment Variables в настройках Koyeb!")
     exit(1)
+
+print("✅ Данные из переменных окружения получены")
 
 try:
-    # Важно: API_ID должен быть числом, поэтому используем int()
-    api_id_int = int(API_ID)
-    
-    # 3. Инициализация клиента
-    client = TelegramClient(StringSession(STRING_SESSION), api_id_int, API_HASH)
+    # 2. Создаем клиент
+    client = TelegramClient(StringSession(STRING_SESSION), API_ID, API_HASH)
     print("✅ Клиент успешно инициализирован")
-except ValueError:
-    print("❌ ОШИБКА: API_ID должен содержать только цифры!")
-    exit(1)
 except Exception as e:
     print(f"❌ Ошибка инициализации сессии: {e}")
     exit(1)
